@@ -1,0 +1,732 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Clock! -By ThatWhiteGuy364</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        height: 100%;
+        background: #060810;
+        font-family: sans-serif;
+        user-select: none;
+      }
+      #cfg {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        background: rgba(10, 14, 24, 0.95);
+        padding: 15px;
+        border-top-right-radius: 8px;
+        border: 1px solid #23304c;
+        display: none;
+        z-index: 99;
+        color: #8296be;
+        font-size: 12px;
+      }
+      #cfg input,
+      #cfg select {
+        background: #121a2c;
+        border: 1px solid #23304c;
+        color: #fff;
+        padding: 4px;
+        margin: 4px 0;
+        display: block;
+        width: 150px;
+        border-radius: 3px;
+      }
+      #cfg button {
+        background: #1e293b;
+        color: #fff;
+        border: none;
+        padding: 5px 10px;
+        cursor: pointer;
+        border-radius: 3px;
+        margin-top: 5px;
+      }
+      #cfg button:hover {
+        background: #334155;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="cfg">
+      Town:<input id="twn" value="Lead, SD" />Lat:<input
+        id="lat"
+        value="44.3522"
+      />Lng:<input id="lng" value="-103.7652" /><button onclick="saveCfg()">
+        Apply
+      </button>
+    </div>
+    <script>
+      const FALLBACK_LAT = 44.3522;
+      const FALLBACK_LNG = -103.7652;
+      let PRESET_TOWN = "Lead, SD";
+
+      let LAT = FALLBACK_LAT;
+      let LNG = FALLBACK_LNG;
+
+      let T_CURR = "Loading...";
+      let W_CURR = "Clear";
+      let W_PREV = "Clear";
+      let W_WIND = "0 mph";
+      let W_HUM = "0%";
+      let W_SR = "06:00";
+      let W_SS = "18:00";
+      let W_TRANS = 1;
+
+      let numbers = [];
+      let borders = [];
+      let stars = [];
+      let clouds = [];
+      let parts = [];
+
+      let numS = 60;
+      let numC = 4;
+      let maxP = 80;
+      let cColor;
+      let cWeight = 4;
+      let fS = 0;
+      let cfgO = 0;
+
+      const fetchLocationData = () =>
+        new Promise((resolve) => {
+          if (!navigator.geolocation)
+            return resolve({ lat: FALLBACK_LAT, lng: FALLBACK_LNG });
+          navigator.geolocation.getCurrentPosition(
+            (pos) =>
+              resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => resolve({ lat: FALLBACK_LAT, lng: FALLBACK_LNG }),
+          );
+        });
+
+      async function updateTownName(lat, lng) {
+        try {
+          const r = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`,
+          );
+          const d = await r.json();
+          const city = d.city || d.locality || d.principalSubdivision || "";
+          const state = d.principalSubdivisionCode
+            ? d.principalSubdivisionCode.split("-")[1]
+            : "";
+          if (city && state) PRESET_TOWN = `${city}, ${state}`;
+          else if (city) PRESET_TOWN = city;
+        } catch (e) {
+          console.error("Geocode failed:", e);
+        }
+      }
+
+      async function startApp() {
+        const coords = await fetchLocationData();
+        LAT = coords.lat;
+        LNG = coords.lng;
+        await updateTownName(LAT, LNG);
+        fetchW();
+      }
+
+      startApp();
+
+      var numbersArray = [
+        [
+          [0, 0, 60, 0],
+          [0, 0, 0, 100],
+          [60, 0, 60, 100],
+          [0, 100, 60, 100],
+        ],
+        [[60, 0, 60, 100]],
+        [
+          [0, 0, 60, 0],
+          [60, 0, 60, 50],
+          [60, 50, 0, 50],
+          [0, 50, 0, 100],
+          [0, 100, 60, 100],
+        ],
+        [
+          [0, 0, 60, 0],
+          [60, 0, 60, 100],
+          [0, 100, 60, 100],
+          [0, 50, 60, 50],
+        ],
+        [
+          [0, 0, 0, 50],
+          [0, 50, 60, 50],
+          [60, 0, 60, 100],
+        ],
+        [
+          [0, 0, 60, 0],
+          [0, 0, 0, 50],
+          [0, 50, 60, 50],
+          [60, 50, 60, 100],
+          [60, 100, 0, 100],
+        ],
+        [
+          [0, 0, 60, 0],
+          [0, 0, 0, 100],
+          [0, 100, 60, 100],
+          [60, 100, 60, 50],
+          [60, 50, 0, 50],
+        ],
+        [
+          [0, 0, 60, 0],
+          [60, 0, 60, 100],
+        ],
+        [
+          [0, 0, 60, 0],
+          [0, 50, 60, 50],
+          [0, 100, 60, 100],
+          [0, 0, 0, 100],
+          [60, 0, 60, 100],
+        ],
+        [
+          [0, 0, 60, 0],
+          [0, 0, 0, 50],
+          [0, 50, 60, 50],
+          [60, 0, 60, 100],
+          [60, 100, 0, 100],
+        ],
+      ];
+
+      function setup() {
+        createCanvas(windowWidth, windowHeight);
+        cColor = color(255);
+        initL();
+        fetchW();
+        setInterval(fetchW, 300000);
+      }
+
+      function initL() {
+        let tw = 505,
+          th = 100,
+          st = 100,
+          sh = height - st,
+          cX = (width - tw) / 2,
+          cY = st + (sh - th) / 2;
+        numbers = [
+          new showNumber(cX, cY, 0),
+          new showNumber(cX + 75, cY, 0),
+          new showNumber(cX + 185, cY, 0),
+          new showNumber(cX + 260, cY, 0),
+          new showNumber(cX + 370, cY, 0),
+          new showNumber(cX + 445, cY, 0),
+        ];
+        borders = [
+          new LerpLine(
+            cX - 25, cY - 30, cX - 25, cY + 130,
+            cX - 25, cY - 30, cX - 25, cY + 130,
+          ),
+          new LerpLine(
+            cX + 530, cY - 30, cX + 530, cY + 130,
+            cX + 530, cY - 30, cX + 530, cY + 130,
+          ),
+          new LerpLine(
+            cX - 25, cY - 30, cX + 530, cY - 30,
+            cX - 25, cY - 30, cX + 530, cY - 30,
+          ),
+          new LerpLine(
+            cX - 25, cY + 130, cX + 530, cY + 130,
+            cX - 25, cY + 130, cX + 530, cY + 130,
+          ),
+        ];
+        stars = [];
+        for (let i = 0; i < numS; i++)
+          stars.push({
+            x: random(width),
+            y: random(st, st + sh * 0.45),
+            s: random(1, 3.5),
+            p: random(TWO_PI),
+            sp: random(0.02, 0.08),
+          });
+        clouds = [];
+        for (let i = 0; i < numC; i++)
+          clouds.push({
+            x: random(-100, width),
+            y: random(st + 10, st + sh * 0.25),
+            w: random(120, 220),
+            h: random(40, 70),
+            sp: random(0.15, 0.35),
+            basePerlin: random(1000), // Base perlin seed for this cloud
+          });
+      }
+
+      function windowResized() {
+        resizeCanvas(windowWidth, windowHeight);
+        initL();
+      }
+
+      function fetchW() {
+        const u =
+          `https://api.open-meteo.com/v1/forecast` +
+          `?latitude=${LAT}&longitude=${LNG}` +
+          `&daily=sunrise,sunset` +
+          `&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code` +
+          `&models=best_match&timezone=auto&forecast_days=1` +
+          `&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+        fetch(u)
+          .then((r) => {
+            if (!r.ok) throw new Error(r.status);
+            return r.json();
+          })
+          .then((d) => parseW(d))
+          .catch(() => {
+            T_CURR = "Offline";
+          });
+      }
+
+      function parseW(d) {
+        if (!d || !d.current) return;
+        T_CURR = Math.round(d.current.temperature_2m) + "°F";
+        W_WIND = Math.round(d.current.wind_speed_10m) + " mph";
+        W_HUM = d.current.relative_humidity_2m + "%";
+        W_PREV = W_CURR;
+        const c = d.current.weather_code;
+        const next =
+          (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c > 94
+            ? "Rainy"
+            : (c >= 71 && c <= 77) || (c >= 85 && c <= 86)
+              ? "Snowy"
+              : "Clear";
+        if (W_PREV !== next) W_TRANS = 0;
+        W_CURR = next;
+        if (d.daily && d.daily.sunrise && d.daily.sunset) {
+          W_SR = d.daily.sunrise[0].split("T")[1].slice(0, 5);
+          W_SS = d.daily.sunset[0].split("T")[1].slice(0, 5);
+        }
+      }
+
+      function draw() {
+        let th =
+          mouseIsPressed && mouseY > 100
+            ? map(mouseX, 0, width, 0, 23.99, true)
+            : hour() + minute() / 60 + second() / 3600;
+        if (W_TRANS < 1) W_TRANS = min(W_TRANS + 0.0011, 1);
+        let sState = getSky(th);
+        drawGrad(sState.t, sState.b);
+        if (sState.srGlow > 0) drawSideGlow(sState.srGlow, true, 255, 145, 60);
+        if (sState.ssGlow > 0) drawSideGlow(sState.ssGlow, false, 240, 100, 40);
+        if (sState.sa > 0) drawS(sState.sa);
+        drawCB(th);
+        drawC(sState.b);
+        drawW();
+        if (th < 7 || th > 18) {
+          drawingContext.shadowBlur = th < 5 || th > 20 ? 15 : 6;
+          drawingContext.shadowColor = cColor.toString();
+        } else {
+          drawingContext.shadowBlur = 0;
+        }
+        let dh = floor(th),
+          dm = floor((th - dh) * 60),
+          ds = floor(((th - dh) * 60 - dm) * 60);
+        numbers[0].number = floor(dh / 10);
+        numbers[1].number = dh % 10;
+        numbers[2].number = floor(dm / 10);
+        numbers[3].number = dm % 10;
+        numbers[4].number = floor(ds / 10);
+        let onesDigit = ds % 10;
+numbers[5].number = Math.floor(onesDigit / 2) * 2 + 1;
+        for (let i = 0; i < borders.length; i++) borders[i].draw();
+        for (let i = 0; i < numbers.length; i++) numbers[i].draw();
+        let cX = (width - 505) / 2,
+          cY = 100 + (height - 100 - 100) / 2;
+        fill(cColor);
+        noStroke();
+        ellipse(cX + 162, cY + 35, 6, 6);
+        ellipse(cX + 162, cY + 65, 6, 6);
+        ellipse(cX + 347, cY + 35, 6, 6);
+        ellipse(cX + 347, cY + 65, 6, 6);
+        drawingContext.shadowBlur = 0;
+        drawHUD(th);
+      }
+
+      function getSky(h) {
+        let nt = color(6, 10, 22),
+          nb = color(18, 22, 42),
+          srt = color(30, 40, 90),
+          srb = color(255, 145, 60),
+          dt = color(30, 115, 210),
+          db = color(125, 200, 250),
+          sst = color(50, 30, 90),
+          ssb = color(240, 100, 40),
+          t,
+          b,
+          sa = 0,
+          srGlow = 0,
+          ssGlow = 0;
+        if (h < 5) {
+          t = nt;
+          b = nb;
+          cColor = color(255);
+          cWeight = 4.5;
+          sa = 255;
+        } else if (h < 7) {
+          let p = map(h, 5, 7, 0, 1);
+          t = lerpColor(nt, srt, p);
+          b = lerpColor(nb, srb, p);
+          cColor = lerpColor(color(255), color(35, 30, 50), p);
+          cWeight = map(p, 0, 1, 4.5, 3.5);
+          sa = map(h, 5, 6, 255, 0, true);
+          srGlow = sin(map(h, 5, 7, 0, PI));
+        } else if (h < 8.5) {
+          let p = map(h, 7, 8.5, 0, 1);
+          t = lerpColor(srt, dt, p);
+          b = lerpColor(srb, db, p);
+          cColor = color(25, 35, 55);
+          cWeight = 3.5;
+        } else if (h < 17.5) {
+          t = dt;
+          b = db;
+          cColor = color(25, 35, 55);
+          cWeight = 3.5;
+        } else if (h < 19.5) {
+          let p = map(h, 17.5, 19.5, 0, 1);
+          t = lerpColor(dt, sst, p);
+          b = lerpColor(db, ssb, p);
+          cColor = lerpColor(color(25, 35, 55), color(255, 245, 215), p);
+          cWeight = map(p, 0, 1, 3.5, 4.5);
+          ssGlow = sin(map(h, 17.5, 19.5, 0, PI));
+        } else if (h < 21) {
+          let p = map(h, 19.5, 21, 0, 1);
+          t = lerpColor(sst, nt, p);
+          b = lerpColor(ssb, nb, p);
+          cColor = color(255);
+          cWeight = 4.5;
+          sa = map(h, 20.2, 21, 0, 255, true);
+        } else {
+          t = nt;
+          b = nb;
+          cColor = color(255);
+          cWeight = 4.5;
+          sa = 255;
+        }
+        return { t, b, sa, srGlow, ssGlow };
+      }
+
+      function drawGrad(c1, c2) {
+        noFill();
+        for (let y = 100; y <= height; y++) {
+          let inter = map(y, 100, height, 0, 1);
+          let c = lerpColor(c1, c2, inter);
+          stroke(c);
+          line(0, y, width, y);
+        }
+      }
+
+      function drawSideGlow(progress, fromLeft, r, g, b) {
+        let ctx = drawingContext;
+        let a = (progress * 0.65).toFixed(4);
+        let grd = fromLeft
+          ? ctx.createLinearGradient(0, 0, width * 0.65, 0)
+          : ctx.createLinearGradient(width, 0, width * 0.35, 0);
+        grd.addColorStop(0, `rgba(${r},${g},${b},${a})`);
+        grd.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        ctx.save();
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 100, width, height - 100);
+        ctx.restore();
+      }
+
+      function drawS(ma) {
+        noStroke();
+        for (let i = 0; i < stars.length; i++) {
+          let s = stars[i];
+          s.x += s.sp;
+          if (s.x > width) s.x = 0;
+          fill(255, 255, 255, map(sin(frameCount * 0.05 + s.p), -1, 1, 30, ma));
+          ellipse(s.x, s.y, s.s, s.s);
+        }
+      }
+
+      function drawCB(h) {
+        let id = h >= 6 && h < 18,
+          ap = id
+            ? map(h, 6, 18, 0, PI)
+            : h >= 18
+              ? map(h, 18, 30, 0, PI)
+              : map(h + 24, 18, 30, 0, PI),
+          cx = map(ap, 0, PI, -60, width + 60),
+          cy = height * 0.95 - sin(ap) * ((height - 100) * 0.7);
+        noStroke();
+        if (id) {
+          fill(255, 235, 140, 180);
+          ellipse(cx, cy, 70, 70);
+          fill(255, 200, 70, 60);
+          ellipse(cx, cy, 95, 95);
+        } else {
+          fill(225, 230, 240, 200);
+          ellipse(cx, cy, 50, 50);
+          fill(getSky(h).t);
+          ellipse(cx + 12, cy - 4, 42, 42);
+        }
+      }
+
+      function drawC(hb) {
+        noStroke();
+        let ct = lerpColor(color(255, 255, 255, 45), hb, 0.4);
+        
+        // 25% chance every 5 seconds to add a new cloud
+        if (frameCount % 300 === 0 && random(1) < 0.25) {
+          let st = 100;
+          let sh = height - st;
+          clouds.push({
+            x: random(-100, width),
+            y: random(st + 10, st + sh * 0.25),
+            w: random(120, 220),
+            h: random(40, 70),
+            sp: random(0.15, 0.35),
+            basePerlin: random(1000),
+          });
+        }
+        
+        for (let i = 0; i < clouds.length; i++) {
+          let c = clouds[i];
+          // Base perlin noise (foundation speed)
+          let basePerlinSpeed = (noise(c.basePerlin) - 0.5) * 0.2;
+          // Sine variation while drifting
+          let sineVariation = sin(frameCount * 0.005 + i) * 0.08;
+          // Light perlin on top
+          let lightPerlin = (noise(frameCount * 0.001 + i) - 0.5) * 0.04;
+          
+          c.x += c.sp + basePerlinSpeed + sineVariation + lightPerlin;
+          if (c.x > width + 100) c.x = -150;
+          fill(ct);
+          ellipse(c.x, c.y, c.w, c.h);
+          ellipse(c.x + c.w * 0.2, c.y - c.h * 0.25, c.w * 0.75, c.h * 0.9);
+        }
+      }
+
+      function drawW() {
+        let activeW =
+          W_TRANS < 1 ? (random(1) < W_TRANS ? W_CURR : W_PREV) : W_CURR;
+        if (activeW === "Clear") return;
+        if (parts.length < maxP && random(1) < 0.6) {
+          parts.push({
+            x: random(width),
+            y: 100,
+            l: random(6, 14),
+            sp: activeW === "Rainy" ? random(6, 11) : random(1, 2.5),
+            w: activeW === "Rainy" ? random(1, 2.5) : random(3, 5),
+          });
+        }
+        for (let i = parts.length - 1; i >= 0; i--) {
+          let p = parts[i];
+          p.y += p.sp;
+          if (activeW === "Rainy") {
+            p.x += 0.5;
+            stroke(174, 219, 242, 160);
+            strokeWeight(p.w);
+            line(p.x, p.y, p.x + 0.5, p.y + p.l);
+          } else {
+            p.x += sin(frameCount * 0.02 + p.y * 0.01) * 0.4;
+            noStroke();
+            fill(255, 255, 255, 180);
+            ellipse(p.x, p.y, p.w, p.w);
+          }
+          if (p.y > height) parts.splice(i, 1);
+        }
+      }
+
+      function drawHUD(h) {
+        fill(12, 16, 28);
+        noStroke();
+        rect(0, 0, width, 100);
+        stroke(35, 48, 76);
+        strokeWeight(2);
+        line(0, 100, width, 100);
+        textAlign(LEFT, TOP);
+        textFont("Courier New");
+        fill(130, 150, 190);
+        noStroke();
+        textSize(10);
+        text("MONITORING HUB:", 25, 15);
+        fill(255);
+        textFont("sans-serif");
+        textStyle(BOLD);
+        textSize(16);
+        text(PRESET_TOWN, 25, 30);
+        textFont("Courier New");
+        textStyle(NORMAL);
+        fill(130, 150, 190);
+        textSize(9);
+        text(
+          `WIND: ${W_WIND} | HUM: ${W_HUM}\nSR: ${W_SR} | SS: ${W_SS}`,
+          25,
+          55,
+        );
+        textAlign(RIGHT, TOP);
+        textFont("sans-serif");
+        textStyle(BOLD);
+        textSize(20);
+        let cCond = W_TRANS < 1 ? W_PREV + "->" + W_CURR : W_CURR;
+        if (W_CURR === "Rainy") fill(110, 190, 245);
+        else if (W_CURR === "Snowy") fill(230, 245, 255);
+        else fill(250, 210, 100);
+        text(`${T_CURR} // ${cCond.toUpperCase()}`, width - 25, 25);
+        fill(100, 116, 139);
+        ellipse(width - 35, 75, 16, 16);
+        fill(255);
+        textAlign(CENTER, CENTER);
+        textSize(9);
+        text("FS", width - 35, 75);
+        textAlign(CENTER, TOP);
+        fill(85, 105, 140);
+        textSize(10);
+        if (mouseIsPressed && mouseY > 100) {
+          fill(240, 120, 80);
+          text(
+            "• PREVIEW ACTIVE: SIMULATING ORBIT TIME " +
+              nf(floor(h), 2) +
+              ":" +
+              nf(floor((h % 1) * 60), 2) +
+              " •",
+            width / 2,
+            78,
+          );
+        } else {
+          text("[CLICK AND DRAG CANVAS TO SIMULATE ORBIT]", width / 2, 78);
+        }
+      }
+
+      function mousePressed() {
+        if (mouseX > width - 50 && mouseY < 95) {
+          let fs = fullscreen();
+          fullscreen(!fs);
+        }
+        if (mouseX < 50 && mouseY > height - 50) {
+          cfgO = !cfgO;
+          document.getElementById("cfg").style.display = cfgO
+            ? "block"
+            : "none";
+        }
+      }
+
+      function saveCfg() {
+        PRESET_TOWN = document.getElementById("twn").value;
+        LAT = parseFloat(document.getElementById("lat").value);
+        LNG = parseFloat(document.getElementById("lng").value);
+        cfgO = 0;
+        document.getElementById("cfg").style.display = "none";
+        fetchW();
+      }
+
+      function LerpLine(x1, y1, x2, y2, nx1, ny1, nx2, ny2) {
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+        this.nx1 = nx1;
+        this.ny1 = ny1;
+        this.nx2 = nx2;
+        this.ny2 = ny2;
+        this.d1 = false;
+        this.d2 = false;
+      }
+
+      LerpLine.prototype.draw = function () {
+        push();
+        stroke(cColor);
+        strokeWeight(cWeight);
+        strokeCap(ROUND);
+        strokeJoin(ROUND);
+        line(this.x1, this.y1, this.x2, this.y2);
+        this.x1 = lerp(this.x1, this.nx1, 0.25);
+        this.x2 = lerp(this.x2, this.nx2, 0.25);
+        this.y1 = lerp(this.y1, this.ny1, 0.25);
+        this.y2 = lerp(this.y2, this.ny2, 0.25);
+        if (dist(this.x1, this.y1, this.nx1, this.ny1) < 1) {
+          this.x1 = this.nx1;
+          this.y1 = this.ny1;
+          this.d1 = true;
+        }
+        if (dist(this.x2, this.y2, this.nx2, this.ny2) < 1) {
+          this.x2 = this.nx2;
+          this.y2 = this.ny2;
+          this.d2 = true;
+        }
+        pop();
+      };
+
+      function showNumber(x, y, n) {
+        this.x = x;
+        this.y = y;
+        this.number = n;
+        this.lA = [];
+      }
+
+      showNumber.prototype.draw = function () {
+        push();
+        translate(this.x, this.y);
+        let lv = numbersArray[this.number];
+        var lt =
+          this.lA.length > 0
+            ? [
+                this.lA[this.lA.length - 1].nx1,
+                this.lA[this.lA.length - 1].ny1,
+                this.lA[this.lA.length - 1].nx2,
+                this.lA[this.lA.length - 1].ny2,
+              ]
+            : [0, 0, 0, 0];
+        if (this.lA.length >= lv.length) {
+          for (var i = 0; i < lv.length; i++) {
+            this.lA[i].nx1 = lv[i][0];
+            this.lA[i].ny1 = lv[i][1];
+            this.lA[i].nx2 = lv[i][2];
+            this.lA[i].ny2 = lv[i][3];
+          }
+          for (; i < this.lA.length; i++) {
+            this.lA[i].nx1 = lv[lv.length - 1][0];
+            this.lA[i].ny1 = lv[lv.length - 1][1];
+            this.lA[i].nx2 = lv[lv.length - 1][2];
+            this.lA[i].ny2 = lv[lv.length - 1][3];
+          }
+        } else {
+          for (var i = 0; i < this.lA.length; i++) {
+            this.lA[i].nx1 = lv[i][0];
+            this.lA[i].ny1 = lv[i][1];
+            this.lA[i].nx2 = lv[i][2];
+            this.lA[i].ny2 = lv[i][3];
+          }
+          for (; i < lv.length; i++) {
+            this.lA.push(
+              new LerpLine(
+                lt[0],
+                lt[1],
+                lt[2],
+                lt[3],
+                lv[i][0],
+                lv[i][1],
+                lv[i][2],
+                lv[i][3],
+              ),
+            );
+          }
+        }
+        for (i = 0; i < this.lA.length; i++) this.lA[i].draw();
+        for (i = 0; i < this.lA.length; i++) {
+          for (var j = 0; j < this.lA.length; j++) {
+            if (
+              i !== j &&
+              this.lA[i].nx1 === this.lA[j].nx1 &&
+              this.lA[i].nx2 === this.lA[j].nx2 &&
+              this.lA[i].ny1 === this.lA[j].ny1 &&
+              this.lA[i].ny2 === this.lA[j].ny2 &&
+              this.lA[i].x1 === this.lA[j].x1 &&
+              this.lA[i].x2 === this.lA[j].x2 &&
+              this.lA[i].y1 === this.lA[j].y1 &&
+              this.lA[i].y2 === this.lA[j].y2
+            ) {
+              this.lA.splice(i, 1);
+              i -= 1;
+              break;
+            }
+          }
+        }
+        pop();
+      };
+    </script>
+  </body>
+</html>
