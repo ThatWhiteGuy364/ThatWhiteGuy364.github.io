@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Words to 8bit Binary Translator</title>
+    <style>
+        @import url(https://db.onlinewebfonts.com/c/7cc6719bd5f0310be3150ba33418e72e?family=Comic+Sans+MS);
+
+        body {
+            color: rgb(85, 255, 255);
+            font-family: "Comic Sans MS", "Comic Sans", cursive;
+            background: linear-gradient(#070066, #5c0118);
+            background-repeat: no-repeat;
+            min-height: 100vh;
+            background-size: cover;
+            margin: 0;
+        }
+
+        .TextBox {
+            margin-top: 20px;
+            padding: 10px;
+            margin-left: auto;
+            margin-right: auto;
+            background: linear-gradient(#5c0118, #070066);
+            border: 1px solid #ccc;
+            min-height: 50px;
+            max-width: 90vw;
+            width: 100%;
+            font-family: monospace;
+            box-sizing: border-box;
+        }
+
+        /* New styles for line justification */
+        .beep-line {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 5px;
+        }
+
+        #playBtn {
+            display: none;
+            margin-top: 10px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+        }
+
+        #playBtn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <label for="words">Words:</label>
+    <input type="text" id="words" name="wordsinput" placeholder="Type here...">
+    <br><br>
+    <label for="delay">BeepBoop Speed (seconds):</label>
+    <input type="number" id="delay" name="delayinput" min="0.05" max="5" step="0.05" value="0.25">
+    <br><br>
+    <button type="button" id="BEGIN">Parse the text.</button>
+
+    <div class="TextBox"></div>
+    <button id="playBtn">Play Audio Sequence</button>
+
+    <script>
+        class BeepBoop {
+            constructor() {
+                this.bins = [];
+                this.audioCtx = null;
+                this.isPlaying = false;
+            }
+
+            parse(text) {
+                this.bins = Array.from(text).map(char => char.charCodeAt(0).toString(2).padStart(8, '0'));
+            }
+
+            // Returns an array of arrays, each sub-array containing 24 words
+            getLines(wordsPerLine = 24) {
+                const allWords = this.bins.join('').split('').map(bit => bit === "0" ? "boop" : "beep");
+                const lines = [];
+                for (let i = 0; i < allWords.length; i += wordsPerLine) {
+                    lines.push(allWords.slice(i, i + wordsPerLine));
+                }
+                return lines;
+            }
+
+            async playSequence(soundsArray, duration) {
+                if (this.isPlaying) return;
+                this.isPlaying = true;
+                if (!this.audioCtx) {
+                    this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                const playBtn = document.getElementById('playBtn');
+                playBtn.disabled = true;
+                playBtn.textContent = "Playing...";
+
+                for (const note of soundsArray) {
+                    const osc = this.audioCtx.createOscillator();
+                    const gain = this.audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(note === "beep" ? 660 : 440, this.audioCtx.currentTime);
+                    gain.gain.setValueAtTime(1, this.audioCtx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.audioCtx.destination);
+                    osc.start();
+                    osc.stop(this.audioCtx.currentTime + duration);
+                    await new Promise(res => setTimeout(res, (duration + 0.02) * 1000));
+                }
+                this.isPlaying = false;
+                playBtn.disabled = false;
+                playBtn.textContent = "Play Audio Sequence";
+            }
+        }
+
+        const translator = new BeepBoop();
+        const startBtn = document.getElementById('BEGIN');
+        const playBtn = document.getElementById('playBtn');
+        const displayBox = document.querySelector('.TextBox');
+
+        startBtn.onclick = () => {
+            const text = document.getElementById('words').value;
+            if (!text) return alert("Please enter some text!");
+
+            translator.parse(text);
+            const lines = translator.getLines(32);
+
+            // Clear previous content
+            displayBox.innerHTML = '';
+
+            // Create justified rows
+            lines.forEach(lineWords => {
+                const lineDiv = document.createElement('div');
+                lineDiv.className = 'beep-line';
+                lineWords.forEach(word => {
+                    const span = document.createElement('span');
+                    span.textContent = word;
+                    lineDiv.appendChild(span);
+                });
+                displayBox.appendChild(lineDiv);
+            });
+
+            playBtn.style.display = "block";
+            playBtn.onclick = () => {
+                const duration = parseFloat(document.getElementById('delay').value) || 0.1;
+                // Flatten the lines back into a single array for audio playback
+                const allSounds = lines.flat();
+                translator.playSequence(allSounds, duration);
+            };
+        };
+    </script>
+
+</body>
+
+</html>
