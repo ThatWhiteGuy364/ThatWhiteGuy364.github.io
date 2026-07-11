@@ -94,6 +94,9 @@
       let fS = 0;
       let cfgO = 0;
 
+      let onesDigit = 0;
+      let oldOne = 0;
+
       const fetchLocationData = () =>
         new Promise((resolve) => {
           if (!navigator.geolocation)
@@ -192,12 +195,30 @@
         ],
       ];
 
+      function setupTick(){
+        window.AudioContext = window.AudioContext || window.webkitAudioContext;
+var context = new AudioContext();
+        var request = new XMLHttpRequest();
+
+request.open('GET', 'tick.mp3', true);
+
+request.responseType = 'arraybuffer';
+        var audBuffer;
+        request.onload = function() {
+  context.decodeAudioData(request.response, function(theBuffer) {
+    audBuffer = theBuffer;
+  }, onError);
+}
+request.send();
+      }
+      
       function setup() {
         createCanvas(windowWidth, windowHeight);
         cColor = color(255);
         initL();
         fetchW();
         setInterval(fetchW, 300000);
+        setupTick();
       }
 
       function initL() {
@@ -299,6 +320,15 @@
         }
       }
 
+      function playTick(){
+  var source = context.createBufferSource(), g = context.createGain();
+  source.buffer = audBuffer;
+  source.start(0);
+  g.gain.value = 1;
+  source.connect(g);
+  g.connect(context.destination);
+      }
+      
       function draw() {
         let th =
           mouseIsPressed && mouseY > 100
@@ -328,6 +358,10 @@
         numbers[3].number = dm % 10;
         numbers[4].number = floor(ds / 10);
         let onesDigit = ds % 10;
+        if (onesDigit != oldOne){
+          playTick();
+          let oldOne = onesDigit;
+        }
 numbers[5].number = Math.floor(onesDigit / 2) * 2 + 1;
         for (let i = 0; i < borders.length; i++) borders[i].draw();
         for (let i = 0; i < numbers.length; i++) numbers[i].draw();
