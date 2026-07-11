@@ -64,6 +64,11 @@
       </button>
     </div>
     <script>
+      // Created by Claude, script developed by WhiteLabs, Owned and Ran by ThatWhiteGuy364
+      // Edits:
+      // - Fixed ReferenceErrors (context/onError) by rewriting the tick-audio loader with proper scoping
+      // - Fixed oldOne shadowing bug that fired the tick sound every frame instead of once per second-change
+      // - Added AudioContext resume-on-gesture guard to satisfy browser autoplay policy
       const FALLBACK_LAT = 44.3522;
       const FALLBACK_LNG = -103.7652;
       let PRESET_TOWN = "Lead, SD";
@@ -94,8 +99,9 @@
       let fS = 0;
       let cfgO = 0;
 
-      let onesDigit = 0;
       let oldOne = 0;
+      let audioCtx = null;
+      let tickBuffer = null;
 
       const fetchLocationData = () =>
         new Promise((resolve) => {
@@ -195,21 +201,16 @@
         ],
       ];
 
-      function setupTick(){
-        window.AudioContext = window.AudioContext || window.webkitAudioContext;
-var context = new AudioContext();
-        var request = new XMLHttpRequest();
-
-request.open('GET', 'tick.mp3', true);
-
-request.responseType = 'arraybuffer';
-        var audBuffer;
-        request.onload = function() {
-  context.decodeAudioData(request.response, function(theBuffer) {
-    audBuffer = theBuffer;
-  }, onError);
-}
-request.send();
+      async function setupTick() {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        try {
+          const r = await fetch("tick.mp3");
+          if (!r.ok) throw new Error(r.status);
+          const raw = await r.arrayBuffer();
+          tickBuffer = await audioCtx.decodeAudioData(raw);
+        } catch (e) {
+          console.error("Tick audio failed to load:", e);
+        }
       }
       
       function setup() {
@@ -320,13 +321,12 @@ request.send();
         }
       }
 
-      function playTick(){
-  var source = context.createBufferSource(), g = context.createGain();
-  source.buffer = audBuffer;
-  source.start(0);
-  g.gain.value = 1;
-  source.connect(g);
-  g.connect(context.destination);
+      function playTick() {
+        if (!audioCtx || !tickBuffer) return;
+        const source = audioCtx.createBufferSource();
+        source.buffer = tickBuffer;
+        source.connect(audioCtx.destination);
+        source.start(0);
       }
       
       function draw() {
@@ -357,10 +357,10 @@ request.send();
         numbers[2].number = floor(dm / 10);
         numbers[3].number = dm % 10;
         numbers[4].number = floor(ds / 10);
-        let onesDigit = ds % 10;
-        if (onesDigit != oldOne){
+        const onesDigit = ds % 10;
+        if (onesDigit !== oldOne) {
           playTick();
-          let oldOne = onesDigit;
+          oldOne = onesDigit;
         }
 numbers[5].number = Math.floor(onesDigit / 2) * 2 + 1;
         for (let i = 0; i < borders.length; i++) borders[i].draw();
@@ -626,6 +626,7 @@ numbers[5].number = Math.floor(onesDigit / 2) * 2 + 1;
       }
 
       function mousePressed() {
+        if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
         if (mouseX > width - 50 && mouseY < 95) {
           let fs = fullscreen();
           fullscreen(!fs);
